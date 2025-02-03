@@ -6,15 +6,19 @@
 
 #define MAP_SIZE                                                4096
 
-#define D_BASE_SOURCE_FILES_PATH                                "/home/srujan/Desktop/HighSpeedUART"
+#define D_BASE_SOURCE_FILES_PATH                                "/home/srujan/Documents/LEAP1_HighSpeedUart_Workspace/Files"
 #define D_HISTORY_TM_FILE                                       D_BASE_SOURCE_FILES_PATH"/HISTORY_TM_TRANSFERFRAMES.txt"
 #define D_PL1_FILE                                              D_BASE_SOURCE_FILES_PATH"/PL1_TRANSFERFRAMES.txt"
 #define D_PL2_FILE                                              D_BASE_SOURCE_FILES_PATH"/PL2_TRANSFERFRAMES.txt"
 
-#define D_HIGH_SPEED_UART_FIFO_SIZE                             1024
+#define D_CONFIG_FILE_PL1_3                                     D_BASE_SOURCE_FILES_PATH"/PL2_CONFIG.txt"
+
+#define D_HIGH_SPEED_UART_FIFO_SIZE                             2048
 #define D_MODBUS_OVERHEADS_SIZE                                 8
 #define D_HISTORY_TM_ONE_FRAME_SIZE                             564 + D_MODBUS_OVERHEADS_SIZE
 #define D_PAYLOAD_ONE_FRAME_SIZE                                564 + D_MODBUS_OVERHEADS_SIZE          // 1460
+#define D_CONFIG_FILE_ONE_FRAME_SIZE                            564 + D_MODBUS_OVERHEADS_SIZE
+
 
 #define D_HIGH_SPEED_UART_BASEADDR                              0xA00B0000
 #define D_HIGH_SPEED_UART_STATUS_REG_OFFSET                     0x00000000

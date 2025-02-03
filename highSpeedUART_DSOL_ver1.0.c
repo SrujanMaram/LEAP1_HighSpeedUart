@@ -1,25 +1,9 @@
 #include "highSpeedUART_DSOL_ver1.0.h"
 
-// uint8_t historyTMDataFrame[D_HISTORY_TM_ONE_FRAME_SIZE];
-// uint8_t payloadDataFrame[D_PAYLOAD_ONE_FRAME_SIZE];
 uint8_t fileReadBuff[D_HIGH_SPEED_UART_FIFO_SIZE] = {0};
-uint32_t highSpeedUartTxFifoOccupancy = 0, highSpeedUartRxFifoOccupancy = 0;
+uint32_t highSpeedUartTxFifoOccupancy = 0;
 void *map_base;
 
-void readCurentHighSpeedUartTxFifoOccupancy()
-{
-    highSpeedUartTxFifoOccupancy = *((volatile uint32_t *)(map_base + ((D_HIGH_SPEED_UART_BASEADDR + D_HIGH_SPEED_UART_TX_FIFO_OCCUPANCY_REG_OFFSET) & (sysconf(_SC_PAGESIZE) - 1))));
-}
-
-uint32_t readCurentHighSpeedUartRxFifoOccupancy()
-{
-    highSpeedUartRxFifoOccupancy = *((volatile uint32_t *)(map_base + ((D_HIGH_SPEED_UART_BASEADDR + D_HIGH_SPEED_UART_RX_FIFO_OCCUPANCY_REG_OFFSET) & (sysconf(_SC_PAGESIZE) - 1))));
-}
-
-void writeToHighSpeedUartDataReg(uint8_t value)
-{
-    *((volatile uint8_t *)(map_base + ((D_HIGH_SPEED_UART_BASEADDR + D_HIGH_SPEED_UART_TX_DATA_REG_OFFSET) & (sysconf(_SC_PAGESIZE) - 1)))) = value;
-}
 
 void writeToHighSpeedUartCtrlReg(uint8_t value)
 {
@@ -30,10 +14,21 @@ void setHighSpeedUartTxFifoThresholdOffset(uint16_t value) {
     *((volatile uint8_t *)(map_base + ((D_HIGH_SPEED_UART_BASEADDR + D_HIGH_SPEED_UART_TX_FIFO_THRESHOLD_REG_OFFSET) & (sysconf(_SC_PAGESIZE) - 1)))) = value;
 }
 
-void loadDatatoHighSpeedUart(uint8_t *data, uint16_t dataSize) {
+/********************************************** START: Transmit Functions **************************************************/
+void readCurentHighSpeedUartTxFifoOccupancy()
+{
+    highSpeedUartTxFifoOccupancy = *((volatile uint32_t *)(map_base + ((D_HIGH_SPEED_UART_BASEADDR + D_HIGH_SPEED_UART_TX_FIFO_OCCUPANCY_REG_OFFSET) & (sysconf(_SC_PAGESIZE) - 1))));
+}
+
+void writeToHighSpeedUartTxDataReg(uint8_t value)
+{
+    *((volatile uint8_t *)(map_base + ((D_HIGH_SPEED_UART_BASEADDR + D_HIGH_SPEED_UART_TX_DATA_REG_OFFSET) & (sysconf(_SC_PAGESIZE) - 1)))) = value;
+}
+
+void loadDataToHighSpeedUart(uint8_t *data, uint16_t dataSize) {
     writeToHighSpeedUartCtrlReg(0x01);
     for (size_t i = 0; i < dataSize; i++) {
-        writeToHighSpeedUartDataReg(data[i]);
+        writeToHighSpeedUartTxDataReg(data[i]);
     }
     writeToHighSpeedUartCtrlReg(0x00);
 }
@@ -67,7 +62,7 @@ void transmitFileOnHighSpeedUart(const char *filename, uint16_t frameSize) {
             readCurentHighSpeedUartTxFifoOccupancy();
         } while ((D_HIGH_SPEED_UART_FIFO_SIZE - highSpeedUartTxFifoOccupancy) < bytesRead);  // Wait until enough space is available
 
-        loadDatatoHighSpeedUart(fileReadBuff, bytesRead);  // ToDo: '0' fills for last frame? (To meet DSOL expectation)
+        loadDataToHighSpeedUart(fileReadBuff, bytesRead);  // ToDo: '0' fills for last frame? (To meet DSOL expectation)
     }   
 
     // Unmap the memory
@@ -79,6 +74,45 @@ void transmitFileOnHighSpeedUart(const char *filename, uint16_t frameSize) {
     // Close the memory device
     close(fd);
 }
+/********************************************** END: Transmit Functions **************************************************/
+
+
+/********************************************** START: Receive Functions **************************************************/
+uint32_t readCurentHighSpeedUartRxFifoOccupancy()
+{
+    return *((volatile uint32_t *)(map_base + ((D_HIGH_SPEED_UART_BASEADDR + D_HIGH_SPEED_UART_RX_FIFO_OCCUPANCY_REG_OFFSET) & (sysconf(_SC_PAGESIZE) - 1))));
+}
+
+uint8_t readFromHighSpeedUartRxDataReg()
+{
+    return *((volatile uint8_t *)(map_base + ((D_HIGH_SPEED_UART_BASEADDR + D_HIGH_SPEED_UART_RX_DATA_REG_OFFSET) & (sysconf(_SC_PAGESIZE) - 1))));
+}
+
+void receiveDataFromHighSpeedUart() {
+    FILE *file = fopen(D_CONFIG_FILE_PL1_3, "wb");
+    if (!file) {
+        printf("Failed to open file config file\n");
+        return;
+    }
+    
+    while (1) {
+        if (readCurentHighSpeedUartRxFifoOccupancy() >= D_CONFIG_FILE_ONE_FRAME_SIZE) {
+            for (int i = 0; i < D_CONFIG_FILE_ONE_FRAME_SIZE; i++) {
+                uint8_t data = readFromHighSpeedUartRxDataReg();
+                fwrite(&data, 1, 1, file);
+            }
+            fflush(file);
+        }
+
+        // ToDo: Condition to close to the while(1) loop
+    }
+    fclose(file);
+}
+
+void receivedFileOnHighSpeedUart() {
+    receiveDataFromHighSpeedUart();
+}
+/********************************************** END: Receive Functions **************************************************/
 
 int main() {
 
@@ -87,7 +121,7 @@ int main() {
     // scanf("%hhd", &fileType);
     fileType = 2;
 
-    // ToDo: 2 - To switch to High Speed UART Mode
+    // ToDo: set GPIO HIGH - To switch to High Speed UART Mode
 
     switch(fileType) {
         case 1:
@@ -107,6 +141,16 @@ int main() {
     } 
 
     // ToDo: set GPIO LOW - To switch back to Modbus UART Mode
+
+
+    /* Config file reception:
+    0. ToDo: set GPIO HIGH - To switch to High Speed UART Mode
+    1. Send command to start transfering a config file from DSOL (frame by frame)
+    2. Each request to read 564 bytes (frame) at a time?
+        - receivedFileOnHighSpeedUart()
+    3. Write the received bytes to a file.
+    4. ToDo: set GPIO LOW - To switch back to Modbus UART Mode
+    */
 
     return 0;
 }
