@@ -88,29 +88,32 @@ uint8_t readFromHighSpeedUartRxDataReg()
     return *((volatile uint8_t *)(map_base + ((D_HIGH_SPEED_UART_BASEADDR + D_HIGH_SPEED_UART_RX_DATA_REG_OFFSET) & (sysconf(_SC_PAGESIZE) - 1))));
 }
 
-void receiveDataFromHighSpeedUart() {
-    FILE *file = fopen(D_CONFIG_FILE_PL1_3, "wb");
-    if (!file) {
-        printf("Failed to open file config file\n");
-        return;
-    }
-    
+void receiveDataFromHighSpeedUart(uint8_t *configBuff) {
     while (1) {
         if (readCurentHighSpeedUartRxFifoOccupancy() >= D_CONFIG_FILE_ONE_FRAME_SIZE) {
             for (int i = 0; i < D_CONFIG_FILE_ONE_FRAME_SIZE; i++) {
-                uint8_t data = readFromHighSpeedUartRxDataReg();
-                fwrite(&data, 1, 1, file);
+                configBuff[i] = readFromHighSpeedUartRxDataReg();
             }
-            fflush(file);
         }
-
         // ToDo: Condition to close to the while(1) loop
     }
-    fclose(file);
 }
 
-void receivedFileOnHighSpeedUart() {
-    receiveDataFromHighSpeedUart();
+void receiveFileOnHighSpeedUart() {
+    uint8_t configData[D_CONFIG_FILE_ONE_FRAME_SIZE] = {0};
+    uint16_t bytesToWrite = 0;
+
+    receiveDataFromHighSpeedUart(configData);
+
+    FILE *file = fopen(D_CONFIG_FILE_PL1_3, "ab");
+    if (!file) {
+        printf("Failed to open file: config file\n");
+        return;
+    }
+    // ToDo: Remove modbus overhead data
+    // Extract "bytesToWrite" based on # of data bytes received on modbus
+
+    fwrite(&configData, 1, bytesToWrite, file);
 }
 /********************************************** END: Receive Functions **************************************************/
 
@@ -146,8 +149,10 @@ int main() {
     /* Config file reception:
     0. ToDo: set GPIO HIGH - To switch to High Speed UART Mode
     1. Send command to start transfering a config file from DSOL (frame by frame)
-    2. Each request to read 564 bytes (frame) at a time?
-        - receivedFileOnHighSpeedUart()
+        - DSOL interface switch-case
+        - Loop until all frames of the config file are received
+    2. For each frame request (to read 564 bytes at a time) call the below function:
+        - receiveFileOnHighSpeedUart()
     3. Write the received bytes to a file.
     4. ToDo: set GPIO LOW - To switch back to Modbus UART Mode
     */
